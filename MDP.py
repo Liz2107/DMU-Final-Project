@@ -1,6 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
-from typing import Any
+import math
+from collections import defaultdict
 
 
 class MDP(ABC):
@@ -147,6 +148,82 @@ class MDP(ABC):
                     best_a = a
             policy[s] = best_a
         return policy
+    
+    def MCTS(self, root_state, n_simulations=1000, c=1.4, max_depth=100):
+        N = defaultdict(int)
+        Nsa = defaultdict(int)
+        Q = defaultdict(float)
+
+        def sample_transition(state, action):
+            transitions = self.transition(state, action)
+            probs, next_states = zip(*transitions)
+            idx = np.random.choice(len(next_states), p=probs)
+            return next_states[idx]
+
+        def select_action(state):
+            state_key = tuple(state)
+
+            best_score = -np.inf
+            best_action = None
+
+            for a in self.actions:
+                if Nsa[(state_key, a)] == 0:
+                    return a
+
+                uct = Q[(state_key, a)] + c * math.sqrt(
+                    math.log(N[state_key]) / Nsa[(state_key, a)]
+                )
+
+                if uct > best_score:
+                    best_score = uct
+                    best_action = a
+
+            return best_action
+
+        for _ in range(n_simulations):
+            state = np.array(root_state, dtype=float).copy()
+            path = []
+            depth = 0
+
+            while True:
+                state_key = tuple(state)
+
+                if self.is_terminal(state) or depth >= max_depth:
+                    break
+
+                a = select_action(state)
+                next_state = sample_transition(state, a)
+                r = self.reward(state, a, next_state)
+
+                path.append((state_key, a, r))
+
+                if Nsa[(state_key, a)] == 0:
+                    state = next_state
+                    break
+
+                state = next_state
+                depth += 1
+
+            G = 0.0
+
+            for s_key, a, r in reversed(path):
+                G = r + self.discount * G
+
+                N[s_key] += 1
+                Nsa[(s_key, a)] += 1
+                Q[(s_key, a)] += (G - Q[(s_key, a)]) / Nsa[(s_key, a)]
+
+        root_key = tuple(root_state)
+
+        best_action = None
+        best_value = -np.inf
+
+        for a in self.actions:
+            if Q[(root_key, a)] > best_value:
+                best_value = Q[(root_key, a)]
+                best_action = a
+
+        return best_action, Q
 
     # def q_value(self, V, state, action):
     #     gamma = self.discount
