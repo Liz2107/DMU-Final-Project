@@ -1,0 +1,172 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import cm
+from matplotlib.colors import Normalize
+
+from util.deterministicmdp import DeterminsticCislunarMDP
+from util.mdpsolvers import simulate_mcts_policy, simulate_mcts_policy_with_rewards
+from util.consts import mu, DU, TU, VU
+
+def plot_trajectory(traj):
+    p = traj[:, 0:3] # primary
+    s = traj[:, 6:9] # secondary
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.plot(p[:,0], p[:,1], p[:,2], label="Primary")
+    ax.plot(s[:,0], s[:,1], s[:,2], label="Secondary")
+
+    ax.scatter(p[0,0], p[0,1], p[0,2], c='green', label="Start")
+    ax.scatter(s[0,0], s[0,1], s[0,2], c='green')
+
+    ax.legend()
+    plt.show()
+
+
+import matplotlib.animation as animation
+
+def animate_trajectory(traj): # kinda lame kinda fun
+    p = traj[:, 0:3]
+    s = traj[:, 6:9]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    line1, = ax.plot([], [], [], 'b-')
+    line2, = ax.plot([], [], [], 'r-')
+
+    def update(i):
+        line1.set_data(p[:i,0], p[:i,1])
+        line1.set_3d_properties(p[:i,2])
+
+        line2.set_data(s[:i,0], s[:i,1])
+        line2.set_3d_properties(s[:i,2])
+
+        return line1, line2
+
+    ani = animation.FuncAnimation(fig, update, frames=len(traj), interval=50)
+    plt.show()
+
+def plot_distance(traj):
+    p = traj[:, 0:3]
+    s = traj[:, 6:9]
+
+    d = np.linalg.norm(p - s, axis=1)
+
+    plt.plot(d)
+    plt.title("Distance between objects")
+    plt.xlabel("time step")
+    plt.ylabel("distance")
+    plt.show()
+
+
+def simulate_no_action(mdp, init_state, steps=200):
+    state = np.array(init_state, dtype=float)
+    trajectory = [state.copy()]
+
+    zero_action = (0.0, 0.0, 0.0)
+
+    for _ in range(steps):
+        if mdp.is_terminal(state):
+            break
+
+        transitions = mdp.transition(state, zero_action)
+        _, next_state = transitions[0]
+
+        state = next_state
+        trajectory.append(state.copy())
+
+    return np.array(trajectory)
+
+
+def plot_comparison(traj_mcts, traj_no_action):
+    p_mcts = traj_mcts[:, 0:3]
+    p_free = traj_no_action[:, 0:3]
+
+    s_mcts = traj_mcts[:, 6:9] # secondary (same in both if no thrust applied to it)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    # MCTS
+    ax.plot(p_mcts[:,0], p_mcts[:,1], p_mcts[:,2], label="Primary (MCTS)", color='blue')
+    # no action
+    ax.plot(p_free[:,0], p_free[:,1], p_free[:,2], linestyle='dashed', label="Primary (No Action)", color='cyan')
+    # secondary
+    ax.plot(s_mcts[:,0], s_mcts[:,1], s_mcts[:,2], label="Secondary", color='red')
+    ax.scatter(p_mcts[0,0], p_mcts[0,1], p_mcts[0,2], c='green', label="Start (Primary)")
+    ax.scatter(p_mcts[-1,0], p_mcts[-1,1], p_mcts[-1,2], c='yellow', label="End (Primary)")
+    ax.scatter(s_mcts[0,0], s_mcts[0,1], s_mcts[0,2], c='magenta', label="Start (Secondary)")
+    ax.scatter(s_mcts[-1,0], s_mcts[-1,1], s_mcts[-1,2], c='black', label="End (Secondary)")
+
+    ax.legend()
+    plt.show()
+
+
+def plot_colored_trajectory(traj, rewards):
+    p = traj[:, 0:3]
+
+    norm = Normalize(vmin=np.min(rewards), vmax=np.max(rewards))
+    cmap = cm.viridis
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    for i in range(len(rewards)):
+        color = cmap(norm(rewards[i]))
+        ax.plot(p[i:i+2, 0], p[i:i+2, 1], p[i:i+2, 2], color=color)
+
+    ax.scatter(p[0,0], p[0,1], p[0,2], c='green', label='Start')
+
+    mappable = cm.ScalarMappable(norm=norm, cmap=cmap)
+    mappable.set_array(rewards)
+    fig.colorbar(mappable, ax=ax, label="Reward/Action Taken")
+
+    ax.legend()
+    plt.show()
+
+u_mag = 0.1 / VU # Maximum control magnitude (0.1 km / s)
+hbr = 1 / DU # Hard-body radius (1 km)
+dt = 0.5 / TU # Time step (1 min)
+
+L4_x = 0.5 - mu
+L4_y = np.sqrt(3) / 2
+L4_z = 0
+
+L4_x_offset = 0.005
+L4_y_offset = -0.005
+L4_z_offset = 0
+dx = 5 / DU
+dy = -5 / DU
+dz = 0
+
+dr = np.array([dx, dy, dz])
+dr_hat = dr / np.linalg.norm(dr)
+
+pr_0 = np.array([L4_x + L4_x_offset, L4_y + L4_y_offset, L4_z + L4_z_offset])
+pv_0 = 1 / VU * dr_hat
+sr_0 = pr_0 + dr
+sv_0 = -pv_0
+
+m = DeterminsticCislunarMDP(mu, u_mag, hbr, dt)
+
+init_state = np.concat((pr_0, pv_0, sr_0, sv_0))
+
+# print(m.MCTS(init_state)) # should spit out a mess bc dictionary indexing is bad
+
+traj = simulate_mcts_policy(m, init_state, steps=10)
+# plot_trajectory(traj)
+# plot_distance(traj)
+# animate_trajectory(traj)
+
+traj_free = simulate_no_action(m, init_state, steps=10)
+plot_comparison(traj, traj_free)
+traj, rewards, took_action = simulate_mcts_policy_with_rewards(m, init_state, steps=10)
+
+plot_colored_trajectory(traj, rewards)
+plot_colored_trajectory(traj, took_action)
+
+# useful to see for small examples with < 100 steps
+print(took_action)
+print(rewards)

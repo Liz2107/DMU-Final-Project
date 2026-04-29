@@ -188,14 +188,14 @@ class MDP(ABC):
             while True:
                 state_key = tuple(state)
 
-                if self.is_terminal(state) or depth >= max_depth:
-                    break
-
                 a = select_action(state)
                 next_state = sample_transition(state, a)
                 r = self.reward(state, a, next_state)
 
                 path.append((state_key, a, r))
+
+                if self.is_terminal(state) or depth >= max_depth:
+                    break
 
                 if Nsa[(state_key, a)] == 0:
                     state = next_state
