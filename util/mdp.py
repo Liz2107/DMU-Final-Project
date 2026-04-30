@@ -2,6 +2,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 import math
 from collections import defaultdict
+import copy
 
 
 class MDP(ABC):
@@ -149,10 +150,22 @@ class MDP(ABC):
             policy[s] = best_a
         return policy
     
-    def MCTS(self, root_state, n_simulations=1000, c=1.4, max_depth=100):
+
+    def MCTS(self, root_state, n_simulations=500, c=1.4, max_depth=50, k=2.0, alpha=0.5):
         N = defaultdict(int)
         Nsa = defaultdict(int)
         Q = defaultdict(float)
+        state_actions = defaultdict(list) # actions tried per state
+
+        # allows for covariance in the state and makes it less finicky
+        def state_to_key(state, precision=6):
+            if isinstance(state, tuple):
+                mean, cov = state
+                mean_key = tuple(np.round(mean, precision))
+                cov_key = tuple(np.round(np.diag(cov), precision))
+                return mean_key + cov_key
+            else:
+                return tuple(np.round(state, precision))
 
         def sample_transition(state, action):
             transitions = self.transition(state, action)
@@ -160,52 +173,109 @@ class MDP(ABC):
             idx = np.random.choice(len(next_states), p=probs)
             return next_states[idx]
 
-        def select_action(state):
-            state_key = tuple(state)
+        def rollout_policy(state):
+            if isinstance(state, tuple):
+                mean, _ = state
+            else:
+                mean = state
 
+            p = mean[0:3]
+            s = mean[6:9]
+            direction = p - s
+
+            best_a = None
+            best_score = -np.inf
+
+            for a in self.actions:
+                score = np.dot(a, direction)
+                if score > best_score:
+                    best_score = score
+                    best_a = a
+
+            return best_a
+
+
+        def rollout(state, depth):
+            G = 0.0
+            discount = 1.0
+
+            for _ in range(depth, max_depth):
+                if self.is_terminal(state):
+                    break
+
+                if np.random.rand() < 0.2: # threshold for when we take a random action instead of following a hueristic policy
+                    a = self.actions[np.random.randint(len(self.actions))]
+                else:
+                    a = rollout_policy(state)
+
+                next_state = sample_transition(state, a)
+                r = self.reward(state, a, next_state)
+
+                G += discount * r
+                discount *= self.discount
+                state = next_state
+
+            return G
+
+        def select_action(state):
+            s_key = state_to_key(state)
+
+            # progressive widening limit
+            max_actions = int(k * (N[s_key] ** alpha)) + 1
+
+            tried = state_actions[s_key]
+
+            # expand new action if allowed
+            if len(tried) < min(max_actions, len(self.actions)):
+                a = self.actions[len(tried)]
+                state_actions[s_key].append(a)
+                return a
+
+            # compute UCB selection
             best_score = -np.inf
             best_action = None
 
-            for a in self.actions:
-                if Nsa[(state_key, a)] == 0:
-                    return a
+            for a in tried:
+                q = Q[(s_key, a)]
+                n_sa = Nsa[(s_key, a)]
 
-                uct = Q[(state_key, a)] + c * math.sqrt(
-                    math.log(N[state_key]) / Nsa[(state_key, a)]
-                )
+                uct = q + c * np.sqrt(np.log(N[s_key] + 1) / (n_sa + 1))
 
                 if uct > best_score:
                     best_score = uct
                     best_action = a
 
             return best_action
-
+        
+        # main loop
         for _ in range(n_simulations):
-            state = np.array(root_state, dtype=float).copy()
+            state = copy.deepcopy(root_state)
             path = []
             depth = 0
 
             while True:
-                state_key = tuple(state)
+                s_key = state_to_key(state)
 
                 a = select_action(state)
                 next_state = sample_transition(state, a)
                 r = self.reward(state, a, next_state)
 
-                path.append((state_key, a, r))
-
+                path.append((s_key, a, r))
+                
                 if self.is_terminal(state) or depth >= max_depth:
                     break
 
-                if Nsa[(state_key, a)] == 0:
-                    state = next_state
+                # expansion: first visit to (s,a)
+                if Nsa[(s_key, a)] == 0:
+                    rollout_return = rollout(next_state, depth + 1)
+                    path[-1] = (s_key, a, r + self.discount * rollout_return)
                     break
 
                 state = next_state
                 depth += 1
 
+            # Backpropagation
             G = 0.0
-
             for s_key, a, r in reversed(path):
                 G = r + self.discount * G
 
@@ -213,14 +283,15 @@ class MDP(ABC):
                 Nsa[(s_key, a)] += 1
                 Q[(s_key, a)] += (G - Q[(s_key, a)]) / Nsa[(s_key, a)]
 
-        root_key = tuple(root_state)
+        root_key = state_to_key(root_state)
 
         best_action = None
-        best_value = -np.inf
+        best_visits = -1
 
         for a in self.actions:
-            if Q[(root_key, a)] > best_value:
-                best_value = Q[(root_key, a)]
+            visits = Nsa[(root_key, a)]
+            if visits > best_visits:
+                best_visits = visits
                 best_action = a
 
         return best_action, Q

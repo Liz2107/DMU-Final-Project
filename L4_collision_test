@@ -127,7 +127,7 @@ def plot_colored_trajectory(traj, rewards):
     plt.show()
 
 u_mag = 0.1 / VU # Maximum control magnitude (0.1 km / s)
-hbr = .1 / DU # Hard-body radius (0.1 km)
+hbr = 1 / DU # Hard-body radius (0.1 km)
 dt = 0.5 / TU # Time step (1 min)
 
 L4_x = 0.5 - mu

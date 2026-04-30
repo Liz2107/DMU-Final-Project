@@ -47,7 +47,7 @@ class DeterminsticCislunarMDP(MDP):
     
     def reward(self, state, action, state_p):
         if self.is_terminal(state): #collision, at least thus far
-            return -1000000000000000
+            return -1000
         elif action != (0,0,0):
             return -1 * self.u_mag
         return 0
