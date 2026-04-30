@@ -3,23 +3,6 @@ import numpy as np
 def simulate_mcts_policy(mdp, init_state, steps=200):
     state = np.array(init_state, dtype=float)
     trajectory = [state.copy()]
-
-    for _ in range(steps):
-        if mdp.is_terminal(state):
-            break
-
-        action, _ = mdp.MCTS(state, n_simulations=200)
-        transitions = mdp.transition(state, action)
-        _, next_state = transitions[0] # deterministic
-
-        state = next_state
-        trajectory.append(state.copy())
-
-    return np.array(trajectory)
-
-def simulate_mcts_policy_with_rewards(mdp, init_state, steps=200):
-    state = np.array(init_state, dtype=float)
-    trajectory = [state.copy()]
     rewards = []
     took_action = []
 

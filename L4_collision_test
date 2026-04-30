@@ -4,7 +4,7 @@ from matplotlib import cm
 from matplotlib.colors import Normalize
 
 from util.deterministicmdp import DeterminsticCislunarMDP
-from util.mdpsolvers import simulate_mcts_policy, simulate_mcts_policy_with_rewards
+from util.mdpsolvers import simulate_mcts_policy
 from util.consts import mu, DU, TU, VU
 
 def plot_trajectory(traj):
@@ -96,8 +96,8 @@ def plot_comparison(traj_mcts, traj_no_action):
     # secondary
     ax.plot(s_mcts[:,0], s_mcts[:,1], s_mcts[:,2], label="Secondary", color='red')
     ax.scatter(p_mcts[0,0], p_mcts[0,1], p_mcts[0,2], c='green', label="Start (Primary)")
-    ax.scatter(p_mcts[-1,0], p_mcts[-1,1], p_mcts[-1,2], c='yellow', label="End (Primary)")
-    ax.scatter(s_mcts[0,0], s_mcts[0,1], s_mcts[0,2], c='magenta', label="Start (Secondary)")
+    ax.scatter(p_mcts[-1,0], p_mcts[-1,1], p_mcts[-1,2], c='tab:purple', label="End (Primary)")
+    ax.scatter(s_mcts[0,0], s_mcts[0,1], s_mcts[0,2], c='tab:pink', label="Start (Secondary)")
     ax.scatter(s_mcts[-1,0], s_mcts[-1,1], s_mcts[-1,2], c='black', label="End (Secondary)")
 
     ax.legend()
@@ -127,7 +127,7 @@ def plot_colored_trajectory(traj, rewards):
     plt.show()
 
 u_mag = 0.1 / VU # Maximum control magnitude (0.1 km / s)
-hbr = 1 / DU # Hard-body radius (1 km)
+hbr = .1 / DU # Hard-body radius (0.1 km)
 dt = 0.5 / TU # Time step (1 min)
 
 L4_x = 0.5 - mu
@@ -153,16 +153,9 @@ m = DeterminsticCislunarMDP(mu, u_mag, hbr, dt)
 
 init_state = np.concat((pr_0, pv_0, sr_0, sv_0))
 
-# print(m.MCTS(init_state)) # should spit out a mess bc dictionary indexing is bad
-
-traj = simulate_mcts_policy(m, init_state, steps=10)
-# plot_trajectory(traj)
-# plot_distance(traj)
-# animate_trajectory(traj)
-
-traj_free = simulate_no_action(m, init_state, steps=10)
+traj, rewards, took_action = simulate_mcts_policy(m, init_state, steps=20)
+traj_free = simulate_no_action(m, init_state, steps=20)
 plot_comparison(traj, traj_free)
-traj, rewards, took_action = simulate_mcts_policy_with_rewards(m, init_state, steps=10)
 
 plot_colored_trajectory(traj, rewards)
 plot_colored_trajectory(traj, took_action)
