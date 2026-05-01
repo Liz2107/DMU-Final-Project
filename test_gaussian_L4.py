@@ -87,6 +87,7 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
     d = np.linalg.norm(p - s, axis=1)
 
     fig, ax = plt.subplots(figsize=(8, 4))
+    ax.plot(d, label="Mean separation", color="blue")
     ax.axhline(hbr, color="red", linestyle="--", label=f"HBR")
 
     if covs is not None:
@@ -100,7 +101,6 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
             d + sigma_scale * stds_rel,
             alpha=0.2, color="blue", label=f"±{sigma_scale}σ band"
         )
-        
 
     ax.set_xlabel("Time step")
     ax.set_ylabel("Distance")
