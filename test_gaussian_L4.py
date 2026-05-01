@@ -87,7 +87,6 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
     d = np.linalg.norm(p - s, axis=1)
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(d + .25, label="Mean separation", color="blue")
     ax.axhline(hbr, color="red", linestyle="--", label=f"HBR")
 
     if covs is not None:
@@ -97,10 +96,11 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
         ])
         ax.fill_between(
             range(len(d)),
-            .25 + d - sigma_scale * stds_rel,
-            .25 + d + sigma_scale * stds_rel,
+            d - sigma_scale * stds_rel,
+            d + sigma_scale * stds_rel,
             alpha=0.2, color="blue", label=f"±{sigma_scale}σ band"
         )
+        
 
     ax.set_xlabel("Time step")
     ax.set_ylabel("Distance")
@@ -185,7 +185,7 @@ mdp = GaussianCislunarMDP(
 )
 
 
-SIM_STEPS   = 10
+SIM_STEPS = 10
 
 print("Running Gaussian MCTS …")
 traj, covs, rewards, took_action = simulate_gaussian_mcts(mdp, init_mean, init_cov, steps=SIM_STEPS, n_simulations=10)
@@ -206,5 +206,6 @@ print(f"HBR: {hbr * DU:.2f} km")
 
 plot_trajectory_with_uncertainty(traj, covs, sigma_scale=2.0)
 plot_distance(traj, hbr, covs=covs, sigma_scale=2.0)
+
 plot_comparison(traj, traj_coast, hbr)
 plot_rewards(rewards, took_action)
