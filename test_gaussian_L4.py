@@ -87,7 +87,6 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
     d = np.linalg.norm(p - s, axis=1)
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(d, label="Mean separation", color="blue")
     ax.axhline(hbr, color="red", linestyle="--", label=f"HBR")
 
     if covs is not None:
@@ -101,6 +100,8 @@ def plot_distance(traj, hbr, covs=None, sigma_scale=2.0, title="Mean separation 
             d + sigma_scale * stds_rel,
             alpha=0.2, color="blue", label=f"±{sigma_scale}σ band"
         )
+    
+    ax.plot(d, label="Mean separation", color="blue")
 
     ax.set_xlabel("Time step")
     ax.set_ylabel("Distance")
@@ -180,7 +181,6 @@ mdp = GaussianCislunarMDP(
     shape_radius=5 * hbr,
     shape_weight=50.0,
     fuel_weight=1.0,
-    safe_bonus=0.1,
     uncertainty_weight=20.0,
 )
 
