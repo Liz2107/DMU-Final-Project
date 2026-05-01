@@ -4,6 +4,9 @@ import math
 from collections import defaultdict
 import copy
 
+from util.dynamicsmodels import eom_cr3bp
+from util.numericalsolvers import ivp
+
 
 class MDP(ABC):
     def __init__(self, discount = 0.99):
@@ -158,7 +161,7 @@ class MDP(ABC):
         state_actions = defaultdict(list) # actions tried per state
 
         # allows for covariance in the state and makes it less finicky
-        def state_to_key(state, precision=6):
+        def state_to_key(state, precision=9):
             if isinstance(state, tuple):
                 mean, cov = state
                 mean_key = tuple(np.round(mean, precision))
@@ -181,13 +184,27 @@ class MDP(ABC):
 
             p = mean[0:3]
             s = mean[6:9]
-            direction = p - s
+
+            pi_full = ivp(eom_cr3bp, mean[12:18], [0, 3 * self.dt], self.integrator, mu=self.mu)
+            pi = pi_full.y[0:3, -1]
+
+            direction_secondary = (p - s) / np.linalg.norm(p - s) # direction away from secondary
+
+            if np.linalg.norm(pi - p) < 1e-6:
+                direction_ideal = np.zeros(3) # if we're already at the ideal point, no direction to go in
+            else:
+                direction_ideal = (pi - p) / np.linalg.norm(pi - p) # direction towards ideal point
+
+            avoidance_weight = 1.0
+            return_weight = 5.0
 
             best_a = None
             best_score = -np.inf
 
             for a in self.actions:
-                score = np.dot(a, direction)
+                a_hat = a / np.linalg.norm(a) if np.linalg.norm(a) > 1e-6 else np.zeros(3) # normalize action for scoring
+                score = (avoidance_weight * np.dot(a_hat, direction_secondary) +
+                         return_weight * np.dot(a_hat, direction_ideal))
                 if score > best_score:
                     best_score = score
                     best_a = a
@@ -203,7 +220,7 @@ class MDP(ABC):
                 if self.is_terminal(state):
                     break
 
-                if np.random.rand() < 0.2: # threshold for when we take a random action instead of following a hueristic policy
+                if np.random.rand() < 0.05: # threshold for when we take a random action instead of following a hueristic policy
                     a = self.actions[np.random.randint(len(self.actions))]
                 else:
                     a = rollout_policy(state)

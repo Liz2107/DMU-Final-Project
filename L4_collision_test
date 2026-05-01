@@ -48,18 +48,33 @@ def animate_trajectory(traj): # kinda lame kinda fun
     ani = animation.FuncAnimation(fig, update, frames=len(traj), interval=50)
     plt.show()
 
-def plot_distance(traj):
+def plot_distance(traj, hbr):
     p = traj[:, 0:3]
     s = traj[:, 6:9]
 
-    d = np.linalg.norm(p - s, axis=1)
+    d = np.linalg.norm(p - s, axis=1) * DU
 
     plt.plot(d)
     plt.title("Distance between objects")
-    plt.xlabel("time step")
-    plt.ylabel("distance")
+    plt.xlabel("Timestep")
+    plt.ylabel("Distance [km]")
+    plt.axhline(y=hbr * DU, color='r', linestyle='--', label=f"Hard-body Radius ({hbr * DU:.2f} km)")
+    plt.legend()
+    plt.grid()
     plt.show()
 
+def plot_deviation(traj):
+    p = traj[:, 0:3]
+    p_no_action = traj[:, 12:15]
+
+    deviation_p = np.linalg.norm(p - p_no_action, axis=1) * DU
+
+    plt.plot(deviation_p, label="Primary Deviation")
+    plt.title("Deviation from No-Action Trajectory")
+    plt.xlabel("Timestep")
+    plt.ylabel("Deviation [km]")
+    plt.grid()
+    plt.show()
 
 def simulate_no_action(mdp, init_state, steps=200):
     state = np.array(init_state, dtype=float)
@@ -80,11 +95,11 @@ def simulate_no_action(mdp, init_state, steps=200):
     return np.array(trajectory)
 
 
-def plot_comparison(traj_mcts, traj_no_action):
-    p_mcts = traj_mcts[:, 0:3]
-    p_free = traj_no_action[:, 0:3]
+def plot_comparison(traj_mcts):
+    p_mcts = (DU * (traj_mcts[:, 0:3] - traj_mcts[0, 0:3]))
+    p_free = (DU * (traj[:, 12:15] - traj_mcts[0, 0:3]))
 
-    s_mcts = traj_mcts[:, 6:9] # secondary (same in both if no thrust applied to it)
+    s_mcts = (DU * (traj_mcts[:, 6:9] - traj_mcts[0, 0:3])) # secondary (same in both if no thrust applied to it)
 
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
@@ -95,17 +110,22 @@ def plot_comparison(traj_mcts, traj_no_action):
     ax.plot(p_free[:,0], p_free[:,1], p_free[:,2], linestyle='dashed', label="Primary (No Action)", color='cyan')
     # secondary
     ax.plot(s_mcts[:,0], s_mcts[:,1], s_mcts[:,2], label="Secondary", color='red')
-    ax.scatter(p_mcts[0,0], p_mcts[0,1], p_mcts[0,2], c='green', label="Start (Primary)")
     ax.scatter(p_mcts[-1,0], p_mcts[-1,1], p_mcts[-1,2], c='tab:purple', label="End (Primary)")
     ax.scatter(s_mcts[0,0], s_mcts[0,1], s_mcts[0,2], c='tab:pink', label="Start (Secondary)")
     ax.scatter(s_mcts[-1,0], s_mcts[-1,1], s_mcts[-1,2], c='black', label="End (Secondary)")
+    ax.scatter(p_mcts[0,0], p_mcts[0,1], p_mcts[0,2], c='green', label="Start (Primary)")
+
+    ax.set_xlabel("x [km]")
+    ax.set_ylabel("y [km]")
+    ax.set_zlabel("z [km]")
+    ax.set_title("Trajectory Comparison")
 
     ax.legend()
     plt.show()
 
 
 def plot_colored_trajectory(traj, rewards):
-    p = traj[:, 0:3]
+    p = (DU * traj[:, 0:3] - traj[0, 0:3])
 
     norm = Normalize(vmin=np.min(rewards), vmax=np.max(rewards))
     cmap = cm.viridis
@@ -126,9 +146,9 @@ def plot_colored_trajectory(traj, rewards):
     ax.legend()
     plt.show()
 
-u_mag = 0.1 / VU # Maximum control magnitude (0.1 km / s)
-hbr = 1 / DU # Hard-body radius (0.1 km)
-dt = 0.5 / TU # Time step (1 min)
+u_mag = 0.5 / VU # Maximum control magnitude (0.5 km / s)
+hbr = 0.1 / DU # Hard-body radius (10 m)
+dt = 0.5 / TU # Time step (0.5 s)
 
 L4_x = 0.5 - mu
 L4_y = np.sqrt(3) / 2
@@ -149,16 +169,18 @@ pv_0 = 1 / VU * dr_hat
 sr_0 = pr_0 + dr
 sv_0 = -pv_0
 
-m = DeterminsticCislunarMDP(mu, u_mag, hbr, dt)
+m = DeterminsticCislunarMDP(mu, u_mag, hbr, dt, integrator='RK45')
 
-init_state = np.concat((pr_0, pv_0, sr_0, sv_0))
+init_state = np.concat((pr_0, pv_0, sr_0, sv_0, pr_0, pv_0))
 
-traj, rewards, took_action = simulate_mcts_policy(m, init_state, steps=20)
-traj_free = simulate_no_action(m, init_state, steps=20)
-plot_comparison(traj, traj_free)
+traj, rewards, took_action = simulate_mcts_policy(m, init_state, steps=60, n_simulations=10, max_depth=10)
+# traj_free = simulate_no_action(m, init_state, steps=20)
+plot_comparison(traj)
 
 plot_colored_trajectory(traj, rewards)
 plot_colored_trajectory(traj, took_action)
+plot_distance(traj, hbr)
+plot_deviation(traj)
 
 # useful to see for small examples with < 100 steps
 print(took_action)

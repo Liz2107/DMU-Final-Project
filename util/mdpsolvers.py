@@ -1,16 +1,17 @@
 import numpy as np
 
-def simulate_mcts_policy(mdp, init_state, steps=200):
+def simulate_mcts_policy(mdp, init_state, steps=200, n_simulations=50, max_depth=10):
     state = np.array(init_state, dtype=float)
     trajectory = [state.copy()]
     rewards = []
     took_action = []
 
-    for _ in range(steps):
+    for i in range(steps):
+        print(i)
         if mdp.is_terminal(state):
             break
 
-        action, _ = mdp.MCTS(state, n_simulations=200)
+        action, _ = mdp.MCTS(state, n_simulations=n_simulations, max_depth=max_depth)
         if action == (0,0,0):
             took_action.append(0)
         else:
